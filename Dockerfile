@@ -8,7 +8,7 @@ WORKDIR /usr/src/app
 COPY package*.json ./
 
 # Install project dependencies
-RUN npm install && npm install sharp
+RUN npm install
 
 # Bundle app source inside Docker image
 COPY . .

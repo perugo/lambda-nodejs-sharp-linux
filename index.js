@@ -1,42 +1,41 @@
-const AWS = require('aws-sdk');
-const sharp = require('sharp');
-const s3 = new AWS.S3();
+const { LambdaClient, InvokeCommand } = require("@aws-sdk/client-lambda");
+const { fromIni } = require("@aws-sdk/credential-provider-ini");
 
-exports.handler = async (event) => {
-  const bucket = event.Bucket;
-  const img = event.img;
-  const inputdir = event.inputdir;
-  const outputdir = event.outputdir;
+const lambdaFunctionARN='arn:aws:lambda:ap-northeast-1:851725334110:function:nodejs-s3-resize-image';
+const invokeParamEvent={
+  "Bucket": "resize-image-noel",
+  "img": "c7ghd-08bwm-6xxwt.jpg",
+  "inputdir": "input/",
+  "outputdir": "output/"
+}
+const client = new LambdaClient({
+  region: "ap-northeast-1",
+});
 
-  // 以下に、イベントから取得した変数
-  console.log(`Bucket: ${bucket}`);
-  console.log(`Image: ${img}`);
-  console.log(`Input Directory: ${inputdir}`);
-  console.log(`Output Directory: ${outputdir}`);
-  
-  const params = {
-    Bucket: bucket,
-    Key:`${inputdir}${img}`
-  };
+const invoke = async (funcName, payload) => {
+
+  const command = new InvokeCommand({
+    FunctionName: funcName,
+    Payload: JSON.stringify(payload),
+  });
 
   try {
-    const image = await s3.getObject(params).promise();
-    const resizedImage = await sharp(image.Body)
-      .resize(200, 200) // 例: 200x200ピクセルにリサイズ
-      .toFormat('jpeg')
-      .toBuffer();
+    // コマンドを送信し、結果を待つ
+    const { Payload, LogResult } = await client.send(command);
 
-    await s3.putObject({
-      Bucket: bucket,
-      Key: `${outputdir}${key}`,
-      Body: resizedImage,
-      ContentType: 'image/jpeg',
-    }).promise();
+    // 結果とログを文字列に変換
+    const result = Payload ? Buffer.from(Payload).toString() : 'No payload';
+    const logs = LogResult ? Buffer.from(LogResult, "base64").toString() : 'No logs';
 
-    return { status: 'success', message: 'Image resized and uploaded successfully' };
-  } catch (err) {
-    console.error(err);
-    return err;
+    return { logs, result };
+  } catch (error) {
+    // エラーをコンソールに出力
+    console.error("Error invoking lambda function:", error);
+    // エラーをスローして、さらに上のレベルでキャッチできるようにする
+    throw error;
   }
-  
 };
+
+invoke(lambdaFunctionARN, invokeParamEvent)
+  .then(({ logs, result }) => console.log('Logs:', logs, 'Result:', result))
+  .catch(error => console.error('Invocation failed:', error));
